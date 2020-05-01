@@ -1,0 +1,30 @@
+export const idrnd36 = (n, sep='-') => @
+  Array.from @
+    crypto.getRandomValues @
+      new Uint32Array(n || 1)
+    v => v.toString(36)
+  .join(sep)
+
+
+export function room_info() ::
+  let rid, uid
+  ::
+    let {hash} = window.location
+    if ! hash ::
+      window.location.hash = hash =
+        '#'+idrnd36()
+    rid = hash.slice(1)
+
+  ::
+    const uid_key = `uid [${rid}]`
+    uid = sessionStorage.getItem(uid_key)
+    if ! uid ::
+      uid = idrnd36()
+      sessionStorage.setItem(uid_key, uid)
+
+  return @{} rid, uid
+
+export const delay = (ms=1000) =>
+  new Promise @\ y =>
+    setTimeout @ y, ms
+

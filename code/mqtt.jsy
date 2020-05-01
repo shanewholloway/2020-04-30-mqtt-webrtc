@@ -1,0 +1,55 @@
+import MQTTClient from 'u8-mqtt-packet/esm/client/web.mjs'
+
+
+export function mqtt_init(opt={}) ::
+  const {rid, uid} = opt
+  const pfx = `swh/${rid}/`
+  const pfx_status = pfx+'p/'
+  const pfx_my_status = pfx_status+uid
+  const pfx_mailbox = pfx+uid+'/'
+
+  const mqtt = new MQTTClient @: mqtt_publish
+  mqtt.ready = setup(mqtt)
+  mqtt.msg_to = (to_uid, msg) =>
+    mqtt.send @
+      pfx+`${to_uid}/${uid}`
+      JSON.stringify(msg)
+
+  return opt.mqtt = mqtt
+
+
+  function mqtt_publish(pkt) ::
+    const {topic, payload} = pkt
+
+    if topic.startsWith(pfx_my_status) ::
+      return
+
+    if topic.startsWith(pfx_status) ::
+      const tid = topic.split(pfx_status)[1]
+      return opt.on_status @ tid,
+        0 === payload.length ? null : payload
+
+    if topic.startsWith(pfx_mailbox) ::
+      const tid = topic.split(pfx_mailbox)[1]
+      return opt.on_msg(tid, payload, pkt)
+
+
+  async function setup(mqtt) ::
+    await mqtt.with_websock @ opt.websock || 'ws://127.0.0.1:9001'
+
+    await mqtt.connect @:
+      client_id: `mq-wrtc-${uid}`
+      will: @{}
+        topic: pfx_status+uid
+        payload: new Uint8Array(0)
+        qos: 1, retain: true
+
+    await mqtt.subscribe @#
+      pfx_status+'+'
+      pfx_mailbox+'+'
+
+    await mqtt.publish @:
+      topic: pfx_status+uid
+      payload: [1]
+      qos: 1, retain: true
+

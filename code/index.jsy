@@ -1,0 +1,65 @@
+import {mqtt_init} from './mqtt.jsy'
+import {rtc_initiate, rtc_accept} from './webrtc.jsy'
+import {room_info} from './utils.jsy'
+
+::!>
+  const {rid, uid} = room_info()
+
+  const map_presence = new Map()
+  const map_rtc = new Map()
+
+  const mqtt = mqtt_init @:
+    rid, uid,
+    //websock: 'wss://test.mosquitto.org:8081'
+
+    async on_status(tid, status) ::
+      if status ::
+        map_presence.set(tid, status)
+      else ::
+        map_presence.delete(tid)
+
+      console.log @ 'Status!:', tid, !!status
+
+      const k = 0xffff & @ parseInt(uid, 36) ^ parseInt(tid, 36)
+      if uid[k % uid.length] <= tid[k % tid.length] ::
+        let ctx = map_rtc.get(tid)
+
+        if undefined === ctx ::
+          ctx = _init_webrtc @ tid,
+            msg => mqtt.msg_to(tid, msg)
+          ctx.next()
+          map_rtc.set @ tid, ctx
+
+
+    async on_msg(tid, payload, pkt) ::
+      const msg = pkt.json()
+      //console.log @ 'Msg to me!:', @[] tid, msg
+
+      let ctx = map_rtc.get(tid)
+      if undefined === ctx ::
+        ctx = _accept_webrtc @ tid,
+          msg => mqtt.msg_to(tid, msg)
+        ctx.next()
+        map_rtc.set @ tid, ctx
+
+      ctx.next(msg)
+
+
+
+
+  async function * _init_webrtc(tid, msg_send) ::
+    console.log @ `Init WebRTC from ${uid} to ${tid}`
+    const obj = rtc_initiate @ uid, msg_send
+    await obj.start()
+
+    while true ::
+      await obj.on_msg @ yield
+
+
+  async function * _accept_webrtc(tid, msg_send) ::
+    console.log @ `ACCEPT WebRTC as ${uid} from ${tid}`
+    const obj = rtc_accept @ uid, msg_send
+
+    while true ::
+      await obj.on_msg @ yield
+

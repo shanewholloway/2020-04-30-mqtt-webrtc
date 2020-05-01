@@ -1,0 +1,136 @@
+import {delay} from './utils.jsy'
+
+const rtc_config = @{}
+  sdpSemantics: 'unified-plan'
+
+  iceServers: @[]
+    @{} urls: @[]
+      'stun:stun1.l.google.com:19302'
+
+  //iceCandidatePoolSize: 2
+  //iceServers: @[]
+    //@{} urls: 'stun:stun.l.google.com:19302'
+    //@{} urls: @[]
+    //  'stun:stun1.l.google.com:19302'
+    //  'stun:stun2.l.google.com:19302'
+    //  'stun:stun3.l.google.com:19302'
+    //  'stun:stun4.l.google.com:19302'
+
+
+
+
+export function rtc_initiate(uid, msg_send) ::
+  const pc = new RTCPeerConnection(rtc_config)
+  pc.addEventListener @ 'icecandidate', @\: candidate ::>
+    if candidate ::
+      console.log @ "ICE:", candidate
+      await msg_send(candidate)
+
+  const channel = new Promise @\ resolve ::
+    const channel = pc.createDataChannel('mqtt-test')
+    as_chan @ channel, resolve, 'chan send'
+
+  channel.then @\ chan ::>
+    console.log @: chan
+    while 1 ::
+      chan.send(`Hello from: ${uid}`)
+      await delay(5000)
+
+  return @{}
+    channel
+
+    async start() ::
+      const offer = await pc.createOffer()
+      await pc.setLocalDescription(offer)
+      await msg_send(offer)
+
+    async on_msg(msg) ::
+      if msg.sdp ::
+        return this._on_offer(msg)
+
+      if msg.candidate ::
+        return this._on_ice(msg)
+
+      console.log @ "rtc_initiate msg", msg
+
+    async _on_ice(ice) ::
+      try ::
+        ice = new RTCIceCandidate(ice)
+        await pc.addIceCandidate(ice)
+      catch err ::
+        console.warn @ err
+
+    async _on_offer(offer) ::
+      await pc.setRemoteDescription(offer)
+
+
+export function rtc_accept(uid, msg_send) ::
+  const pc = new RTCPeerConnection(rtc_config)
+  pc.addEventListener @ 'icecandidate', @\: candidate ::>
+    if candidate ::
+      console.log @ "ICE:", candidate
+      await msg_send(candidate)
+
+  const channel = new Promise @\ resolve ::
+    pc.ondatachannel = @\: channel ::
+      as_chan @ channel, resolve, 'chan recv'
+
+  channel.then @\ chan ::>
+    console.log @: chan
+    while true ::
+      chan.send(`Hello from: ${uid}`)
+      await delay(4000)
+
+  return @{}
+    channel
+
+    async on_msg(msg) ::
+      if msg.sdp ::
+        return this._on_offer(msg)
+
+      if msg.candidate ::
+        return this._on_ice(msg)
+
+      console.log @ "rtc_accept msg", msg
+
+    async _on_ice(ice) ::
+      try ::
+        ice = new RTCIceCandidate(ice)
+        await pc.addIceCandidate(ice)
+      catch err ::
+        console.warn @ err
+
+    async _on_offer(offer) ::
+      await pc.setRemoteDescription(offer)
+      const answer = await pc.createAnswer()
+      await pc.setLocalDescription(answer)
+      await msg_send @ pc.localDescription
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function as_chan(chan, resolve, prefix) ::
+  window.swh_chan = chan
+  chan.binaryType = 'arraybuffer'
+
+  chan.onopen = @\ evt ::
+    console.log @ `${prefix}::open`, evt
+    resolve(chan)
+
+  chan.onclose = @\ evt ::
+    console.log @ `${prefix}::close`, evt
+
+  chan.onmessage = @\ evt ::
+    console.log @ `${prefix}::msg`, evt.data
+
