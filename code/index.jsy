@@ -1,65 +1,62 @@
-import {mqtt_init} from './mqtt.jsy'
-import {rtc_initiate, rtc_accept} from './webrtc.jsy'
+import {mqtt_presence} from './mqtt.jsy'
+//import {rtc_initiate, rtc_accept} from './webrtc.jsy'
+import {RTCHandshake} from './rtc_handshake.jsy'
 import {room_info} from './utils.jsy'
 
-::!>
-  const {rid, uid} = room_info()
 
-  const map_presence = new Map()
-  const map_rtc = new Map()
+const {room_id, uid} = room_info()
+const map_rtc = new Map()
 
-  const mqtt = mqtt_init @:
-    rid, uid,
-    //websock: 'wss://test.mosquitto.org:8081'
-
-    async on_status(tid, status) ::
-      if status ::
-        map_presence.set(tid, status)
-      else ::
-        map_presence.delete(tid)
-
-      console.log @ 'Status!:', tid, !!status
-
-      const k = 0xffff & @ parseInt(uid, 36) ^ parseInt(tid, 36)
-      if uid[k % uid.length] <= tid[k % tid.length] ::
-        let ctx = map_rtc.get(tid)
-
-        if undefined === ctx ::
-          ctx = _init_webrtc @ tid,
-            msg => mqtt.msg_to(tid, msg)
-          ctx.next()
-          map_rtc.set @ tid, ctx
+const mqtt = mqtt_presence @:
+  pfx: `swh/${room_id}`, uid
+  //websock: 'ws://9030.shaneholloway.com:9001'
+  websock: 'ws://127.0.0.1:9001'
+  //websock: 'wss://test.mosquitto.org:8081'
 
 
-    async on_msg(tid, payload, pkt) ::
-      const msg = pkt.json()
-      //console.log @ 'Msg to me!:', @[] tid, msg
+mqtt.on_status @\ peer_uid, pkt :: 
+  const {payload} = pkt
+  if ! payload[0] :: return
 
-      let ctx = map_rtc.get(tid)
-      if undefined === ctx ::
-        ctx = _accept_webrtc @ tid,
-          msg => mqtt.msg_to(tid, msg)
-        ctx.next()
-        map_rtc.set @ tid, ctx
+  const bmoc = sessionStorage.getItem('bmoc')
+  if ! bmoc :: return
 
-      ctx.next(msg)
+  if ! map_rtc.has(peer_uid) ::
+    const rtc = _new_rtc(peer_uid)
+    rtc.rtc_initiate()
 
 
+mqtt.on_any_msg @\ peer_uid, pkt :: 
+  const {payload} = pkt
+  if ! map_rtc.has(peer_uid) ::
+    const rtc = _new_rtc(peer_uid)
+    rtc.on_msg @ pkt.json()
 
+const all_chans = window.swh_all_chans = new Map()
+window.swh_send_all = @\ msg ::
+  msg = JSON.stringify(msg)
+  for const ea of all_chans.values() ::
+    ea.send(msg)
 
-  async function * _init_webrtc(tid, msg_send) ::
-    console.log @ `Init WebRTC from ${uid} to ${tid}`
-    const obj = rtc_initiate @ uid, msg_send
-    await obj.start()
+function _new_rtc(peer_uid) ::
+  const _mqtt_chan = mqtt.msg_chan(peer_uid)
+  const rtc = RTCHandshake.create(_mqtt_chan.json_send)
+  map_rtc.set @ peer_uid, rtc
 
-    while true ::
-      await obj.on_msg @ yield
+  _mqtt_chan.on_msg @ pkt => rtc.on_msg(pkt.json())
 
+  const chan = Object.assign @
+    rtc.pc.createDataChannel @ 'mqtt-test', @{}
+      ordered: false, id: 0, negotiated: true, maxPacketLifeTime: 250
 
-  async function * _accept_webrtc(tid, msg_send) ::
-    console.log @ `ACCEPT WebRTC as ${uid} from ${tid}`
-    const obj = rtc_accept @ uid, msg_send
+    @{}
+      binaryType: 'arraybuffer'
+      onopen() :: all_chans.set(peer_uid, chan)
+      onclose() :: all_chans.delete(peer_uid)
 
-    while true ::
-      await obj.on_msg @ yield
+      onmessage({data}) ::
+        console.log @ `${chan.label}::msg`, Date.now() - new Date(JSON.parse(data).ts)
+
+  return rtc
+
 

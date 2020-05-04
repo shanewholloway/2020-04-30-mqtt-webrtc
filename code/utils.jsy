@@ -1,28 +1,25 @@
-export const idrnd36 = (n, sep='-') => @
-  Array.from @
-    crypto.getRandomValues @
-      new Uint32Array(n || 1)
-    v => v.toString(36)
-  .join(sep)
+export const idrnd36 = ()=> crypto
+  .getRandomValues(new Uint32Array(1))
+  .toString(36)
 
 
 export function room_info() ::
-  let rid, uid
+  let room_id, uid
   ::
     let {hash} = window.location
     if ! hash ::
       window.location.hash = hash =
         '#'+idrnd36()
-    rid = hash.slice(1)
+    room_id = hash.slice(1)
 
   ::
-    const uid_key = `uid [${rid}]`
+    const uid_key = `uid [${room_id}]`
     uid = sessionStorage.getItem(uid_key)
     if ! uid ::
       uid = idrnd36()
       sessionStorage.setItem(uid_key, uid)
 
-  return @{} rid, uid
+  return @{} room_id, uid
 
 export const delay = (ms=1000) =>
   new Promise @\ y =>

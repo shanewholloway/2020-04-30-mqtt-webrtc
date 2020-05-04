@@ -1,55 +1,56 @@
-import MQTTClient from 'u8-mqtt-packet/esm/client/web.mjs'
+import MQTTClient from 'u8-mqtt/esm/web/v4.mjs'
+
+export function mqtt_presence(opt={}) ::
+  let {pfx, uid} = opt
+  const mqtt = new MQTTClient()
+
+  mqtt.msg_to = (peer_uid, msg) =>
+    mqtt.json_send @ `${pfx}/m/${peer_uid}/${uid}`, msg
+
+  mqtt.msg_chan = @\ peer_uid ::
+    const tpc_send = `${pfx}/m/${peer_uid}/${uid}`
+    const tpc_recv = `${pfx}/m/${uid}/${peer_uid}`
+    return @:
+      json_send: mqtt.json_send(tpc_send)
+      on_msg: on_msg => mqtt.msg_subscribe @ tpc_recv, on_msg
 
 
-export function mqtt_init(opt={}) ::
-  const {rid, uid} = opt
-  const pfx = `swh/${rid}/`
-  const pfx_status = pfx+'p/'
-  const pfx_my_status = pfx_status+uid
-  const pfx_mailbox = pfx+uid+'/'
+  mqtt.on_status = on_status =>
+    mqtt.on_msg @ `${pfx}/p/:peer_uid`, @\ pkt, {peer_uid}, ctx ::
+      if peer_uid !== uid ::
+        on_status(peer_uid, pkt, ctx)
 
-  const mqtt = new MQTTClient @: mqtt_publish
-  mqtt.ready = setup(mqtt)
-  mqtt.msg_to = (to_uid, msg) =>
-    mqtt.send @
-      pfx+`${to_uid}/${uid}`
-      JSON.stringify(msg)
+  mqtt.on_any_msg = on_any_msg =>
+    mqtt.on_msg @ `${pfx}/m/${uid}/:peer_uid`, @\ pkt, {peer_uid}, ctx ::
+      if ctx.idx || peer_uid === uid ::
+        return
 
-  return opt.mqtt = mqtt
+      return on_any_msg(peer_uid, pkt, ctx)
 
 
-  function mqtt_publish(pkt) ::
-    const {topic, payload} = pkt
+  const _as_status_obj = status => @:
+    topic: `${pfx}/p/${uid}`
+    payload: status
+    qos: 1, retain: true
 
-    if topic.startsWith(pfx_my_status) ::
-      return
+  mqtt.update_status = status =>
+    mqtt.publish @ _as_status_obj(status)
 
-    if topic.startsWith(pfx_status) ::
-      const tid = topic.split(pfx_status)[1]
-      return opt.on_status @ tid,
-        0 === payload.length ? null : payload
+  mqtt.ready = mqtt
+    .with_websock(opt.websock)
+    .then(_setup)
 
-    if topic.startsWith(pfx_mailbox) ::
-      const tid = topic.split(pfx_mailbox)[1]
-      return opt.on_msg(tid, payload, pkt)
+  return mqtt
 
-
-  async function setup(mqtt) ::
-    await mqtt.with_websock @ opt.websock || 'ws://127.0.0.1:9001'
-
-    await mqtt.connect @:
+  async function _setup() ::
+    mqtt.connect @:
       client_id: `mq-wrtc-${uid}`
-      will: @{}
-        topic: pfx_status+uid
-        payload: new Uint8Array(0)
-        qos: 1, retain: true
+      flags: @{} clean_start: true
+      will: _as_status_obj('')
 
-    await mqtt.subscribe @#
-      pfx_status+'+'
-      pfx_mailbox+'+'
+    mqtt.subscribe @#
+      `${pfx}/p/+`,
+      `${pfx}/m/${uid}/+`,
 
-    await mqtt.publish @:
-      topic: pfx_status+uid
-      payload: [1]
-      qos: 1, retain: true
-
+    mqtt.update_status @
+      opt.presence || 'here'
