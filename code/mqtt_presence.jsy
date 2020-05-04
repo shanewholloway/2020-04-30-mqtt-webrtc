@@ -1,5 +1,6 @@
 import MQTTClient from 'u8-mqtt/esm/web/v4.mjs'
 
+export default mqtt_presence
 export function mqtt_presence(opt={}) ::
   let {pfx, uid} = opt
   const mqtt = new MQTTClient()

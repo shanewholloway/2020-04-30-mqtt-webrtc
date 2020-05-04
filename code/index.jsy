@@ -1,4 +1,4 @@
-import {mqtt_presence} from './mqtt.jsy'
+import {mqtt_presence} from './mqtt_presence.jsy'
 //import {rtc_initiate, rtc_accept} from './webrtc.jsy'
 import {RTCHandshake} from './rtc_handshake.jsy'
 import {room_info} from './utils.jsy'

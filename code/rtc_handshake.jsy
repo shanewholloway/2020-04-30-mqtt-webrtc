@@ -1,4 +1,5 @@
 
+export default RTCHandshake
 export class RTCHandshake ::
   static with_peer(pc, send_msg) ::
     return new this(pc, send_msg)
