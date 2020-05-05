@@ -8,25 +8,27 @@ export function mqtt_presence(opt={}) ::
   mqtt.msg_to = (peer_uid, msg) =>
     mqtt.json_send @ `${pfx}/m/${peer_uid}/${uid}`, msg
 
-  mqtt.msg_chan = @\ peer_uid ::
-    const tpc_send = `${pfx}/m/${peer_uid}/${uid}`
-    const tpc_recv = `${pfx}/m/${uid}/${peer_uid}`
-    return @:
+  mqtt.msg_chan = @\ peer_uid, chan_id ::
+    if ! chan_id ::
+      chan_id = Math.random().toString(36).slice(2)
+
+    const tpc_send = `${pfx}/m/${peer_uid}/${uid}/${chan_id}/`
+    const tpc_recv = `${pfx}/m/${uid}/${peer_uid}/${chan_id}/`
+    return @: chan_id
       json_send: mqtt.json_send(tpc_send)
       on_msg: on_msg => mqtt.msg_subscribe @ tpc_recv, on_msg
 
 
-  mqtt.on_status = on_status =>
-    mqtt.on_msg @ `${pfx}/p/:peer_uid`, @\ pkt, {peer_uid}, ctx ::
-      if peer_uid !== uid ::
-        on_status(peer_uid, pkt, ctx)
+  mqtt.on_msg @ `${pfx}/p/${uid}`, false
+  mqtt.on_msg @ `${pfx}/m/${uid}/${uid}`, false
+  mqtt.on_msg @ `${pfx}/m/${uid}/${uid}/*`, false
 
-  mqtt.on_any_msg = on_any_msg =>
-    mqtt.on_msg @ `${pfx}/m/${uid}/:peer_uid`, @\ pkt, {peer_uid}, ctx ::
-      if ctx.idx || peer_uid === uid ::
-        return
+  mqtt.on_status = @\ handler::
+    mqtt.on_msg @ `${pfx}/p/:peer_uid`, handler
 
-      return on_any_msg(peer_uid, pkt, ctx)
+  mqtt.on_message = @\ handler ::
+    mqtt.on_msg @ `${pfx}/m/${uid}/:peer_uid/:chan_id`, handler
+    mqtt.on_msg @ `${pfx}/m/${uid}/:peer_uid`, handler
 
 
   const _as_status_obj = status => @:
@@ -50,8 +52,8 @@ export function mqtt_presence(opt={}) ::
       will: _as_status_obj('')
 
     mqtt.subscribe @#
-      `${pfx}/p/+`,
-      `${pfx}/m/${uid}/+`,
+      @[] `${pfx}/p/+`, 1
+      @[] `${pfx}/m/${uid}/#`, 0
 
     mqtt.update_status @
       opt.presence || 'here'

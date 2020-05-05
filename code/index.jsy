@@ -1,62 +1,104 @@
-import {mqtt_presence} from './mqtt_presence.jsy'
-//import {rtc_initiate, rtc_accept} from './webrtc.jsy'
 import {RTCHandshake} from './rtc_handshake.jsy'
-import {room_info} from './utils.jsy'
+import {mqtt_presence} from './mqtt_presence.jsy'
+import {room_info, id_winner} from './utils.jsy'
 
 
 const {room_id, uid} = room_info()
 const map_rtc = new Map()
 
+const ts0 = window.ts0 = Date.now()
+const all_chans = window.swh_all_chans = new Map()
+window.swh_send_all = @\ msg ::
+  if 'string' === typeof msg ::
+    msg = {sz: msg}
+
+  msg.ts = Date.now()
+  const data = JSON.stringify(msg)
+
+  add_output(true, msg)
+  for const ea of all_chans.values() ::
+    ea.send(data)
+
+document.getElementById('frm_input')
+.addEventListener @ 'submit', evt => ::
+  evt.preventDefault()
+  const el_msg = evt.target.elements.msg
+  const msg = el_msg.value
+  if msg ::
+    window.swh_send_all @ msg
+    el_msg.value = ''
+
+
 const mqtt = mqtt_presence @:
   pfx: `swh/${room_id}`, uid
-  //websock: 'ws://9030.shaneholloway.com:9001'
-  websock: 'ws://127.0.0.1:9001'
+  //websock: 'ws://127.0.0.1:9001'
+  websock: 'ws://172.16.24.64:9001'
   //websock: 'wss://test.mosquitto.org:8081'
 
 
-mqtt.on_status @\ peer_uid, pkt :: 
+mqtt.on_status @\ pkt, {peer_uid} :: 
   const {payload} = pkt
   if ! payload[0] :: return
 
-  const bmoc = sessionStorage.getItem('bmoc')
-  if ! bmoc :: return
+  if map_rtc.has(peer_uid) :: return
+  if uid !== id_winner(uid, peer_uid) :: return
 
-  if ! map_rtc.has(peer_uid) ::
-    const rtc = _new_rtc(peer_uid)
-    rtc.rtc_initiate()
+  const rtc = _new_rtc(peer_uid)
+  rtc.rtc_initiate()
 
 
-mqtt.on_any_msg @\ peer_uid, pkt :: 
-  const {payload} = pkt
-  if ! map_rtc.has(peer_uid) ::
-    const rtc = _new_rtc(peer_uid)
+mqtt.on_message @\ pkt, {peer_uid, chan_id} :: 
+  if chan_id && ! map_rtc.has(peer_uid) ::
+    const rtc = _new_rtc(peer_uid, chan_id)
     rtc.on_msg @ pkt.json()
 
-const all_chans = window.swh_all_chans = new Map()
-window.swh_send_all = @\ msg ::
-  msg = JSON.stringify(msg)
-  for const ea of all_chans.values() ::
-    ea.send(msg)
 
-function _new_rtc(peer_uid) ::
-  const _mqtt_chan = mqtt.msg_chan(peer_uid)
+function _new_rtc(peer_uid, chan_id) ::
+  const _mqtt_chan = mqtt.msg_chan(peer_uid, chan_id)
   const rtc = RTCHandshake.create(_mqtt_chan.json_send)
   map_rtc.set @ peer_uid, rtc
 
-  _mqtt_chan.on_msg @ pkt => rtc.on_msg(pkt.json())
+  _mqtt_chan.on_msg @\ pkt ::
+    rtc.on_msg(pkt.json())
+    console.log @ 'rtc', 'signalingState:', rtc.pc.signalingState, 'connectionState:', rtc.pc.connectionState
+
 
   const chan = Object.assign @
     rtc.pc.createDataChannel @ 'mqtt-test', @{}
-      ordered: false, id: 0, negotiated: true, maxPacketLifeTime: 250
+      id: 0, negotiated: true,
+      ordered: false, maxPacketLifeTime: 250,
 
     @{}
       binaryType: 'arraybuffer'
-      onopen() :: all_chans.set(peer_uid, chan)
-      onclose() :: all_chans.delete(peer_uid)
+
+      onopen() :: 
+        const ts1 = Date.now()
+        console.log @ 'chan:', chan.label, ts1 - ts0
+        all_chans.set(peer_uid, chan)
+
+      onclose() ::
+        all_chans.delete(peer_uid)
+        map_rtc.delete @ peer_uid
 
       onmessage({data}) ::
-        console.log @ `${chan.label}::msg`, Date.now() - new Date(JSON.parse(data).ts)
+        const ts1 = Date.now(), msg = JSON.parse(data)
+        /*
+        if undefined === msg.r_ts1 ::
+          msg.td = ts1 - msg.ts
+          msg.r_ts1 = ts1
+          chan.send @ JSON.stringify(msg)
+        else ::
+          msg.r_td = ts1 - msg.ts
+        */
+
+        console.log @ `${chan.label}::msg`, msg
+        add_output(false, msg)
 
   return rtc
 
+function add_output(from_me, {ts, ... msg}) ::
+  const el = document.createElement('output')
+  el.style = `color: ${from_me ? 'blue' : 'green'}`
+  el.textContent = '\n' + JSON.stringify(msg) + '\n'
+  document.getElementById('output').appendChild(el)
 

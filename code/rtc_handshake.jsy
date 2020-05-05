@@ -22,31 +22,34 @@ export class RTCHandshake ::
 
     this.pc = pc
     this.send_msg = send_msg
-    pc.addEventListener @ 'icecandidate', this._evt_ice.bind(this)
+    pc.addEventListener @ 'icecandidate', this._evt_ice.bind(this, send_msg)
 
     // pc.addEventListener @ 'datachannel', evt => evt.channel
     // pc.addEventListener @ 'connectionstatechange', evt => pc.connectionState
     // pc.addEventListener @ 'signalingstatechange', evt => pc.signalingState
 
 
-  _evt_ice({candidate}) ::
+  _evt_ice(send_msg, {candidate}) ::
     if candidate ::
-      this.send_msg(candidate)
+      send_msg(candidate)
 
   async rtc_initiate() ::
-    const {pc, send_msg} = this
+    const {pc} = this
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
-    await send_msg(offer)
+    await this.send_msg(offer)
 
   async _rtc_offer(offer) ::
-    const {pc, send_msg} = this
+    const {pc} = this
+    if null != pc.remoteDescription ::
+      return
+
     await pc.setRemoteDescription(offer)
 
     if null == pc.localDescription ::
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
-      await send_msg(answer)
+      await this.send_msg(answer)
 
   async _rtc_ice(msg) ::
     const ice = new RTCIceCandidate(msg)
@@ -62,5 +65,5 @@ export class RTCHandshake ::
       this._on_msg_error(msg, err)
 
   _on_msg_error(msg, err) ::
-    console.warn @ "ICE error:", err
+    console.warn @ "RTC error:", err
 

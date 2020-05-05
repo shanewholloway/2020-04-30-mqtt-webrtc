@@ -8,13 +8,26 @@
   <link rel='icon' href='data:image/png;base64,' />
   <link rel='stylesheet' crossorigin='anonymous' href='https://cdn.jsdelivr.net/npm/shoelace-css@1.0.0-beta24/dist/shoelace.css' />
 
+  <style>
+    body>main { max-width: 40em; margin: auto; }
+  </style>
+
   <script crossorigin='anonymous' src='https://cdn.jsdelivr.net/npm/superfine@7.0.0/dist/superfine.min.js'></script>
 </head>
 
 <body>
-  <h1>Lovely static HTML World!</h1>
 
-<main></main>
+<main>
+  <h1>MQTT & WebRTC</h1>
+
+  <form id='frm_input'>
+    <input autofocus name='msg'></input>
+    <button>Send</button>
+  </form>
+
+  <pre id='output'>
+  </pre>
+</main>
 
 <script type=module src='./esm/index.mjs'></script>
 </body>
