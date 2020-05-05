@@ -24,11 +24,6 @@ export class RTCHandshake ::
     this.send_msg = send_msg
     pc.addEventListener @ 'icecandidate', this._evt_ice.bind(this, send_msg)
 
-    // pc.addEventListener @ 'datachannel', evt => evt.channel
-    // pc.addEventListener @ 'connectionstatechange', evt => pc.connectionState
-    // pc.addEventListener @ 'signalingstatechange', evt => pc.signalingState
-
-
   _evt_ice(send_msg, {candidate}) ::
     if candidate ::
       send_msg(candidate)

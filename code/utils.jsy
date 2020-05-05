@@ -1,6 +1,6 @@
-export const idrnd36 = ()=> crypto
-  .getRandomValues(new Uint32Array(1))[0]
-  .toString(36)
+
+export const idrnd36 = ()=>
+  Math.random().toString(36).slice(2)
 
 
 export function room_info() ::
@@ -30,7 +30,7 @@ export function id_winner(a, b) ::
   for let i=0;i<len;i++ ::
     v ^= a.charCodeAt(i) ^ b.charCodeAt(i)
 
-  v = (v >>> 4) & 0xf
-  v = (0x6996 >>> v) & 1
-  return v ? a : b
+  v ^= v >>> 4
+  v = 27030 >>> (v & 0xf)
+  return (v&1) ? a : b
 
