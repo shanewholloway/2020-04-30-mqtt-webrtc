@@ -32,8 +32,8 @@ document.getElementById('frm_input')
 const mqtt = mqtt_presence @:
   pfx: `swh/${room_id}`, uid
   //websock: 'ws://127.0.0.1:9001'
-  websock: 'ws://172.16.24.64:9001'
-  //websock: 'wss://test.mosquitto.org:8081'
+  //websock: 'ws://172.16.24.64:9001'
+  websock: 'wss://test.mosquitto.org:8081'
 
 
 mqtt.on_status @\ pkt, {peer_uid} :: 
@@ -50,7 +50,7 @@ mqtt.on_status @\ pkt, {peer_uid} ::
 mqtt.on_message @\ pkt, {peer_uid, chan_id} :: 
   if chan_id && ! map_rtc.has(peer_uid) ::
     const rtc = _new_rtc(peer_uid, chan_id)
-    rtc.on_msg @ pkt.json()
+    rtc.on_rtc_msg @ pkt.json()
 
 
 function _new_rtc(peer_uid, chan_id) ::
@@ -59,7 +59,7 @@ function _new_rtc(peer_uid, chan_id) ::
   map_rtc.set @ peer_uid, rtc
 
   _mqtt_chan.on_msg @\ pkt ::
-    rtc.on_msg(pkt.json())
+    rtc.on_rtc_msg(pkt.json())
     console.log @ 'rtc', 'signalingState:', rtc.pc.signalingState, 'connectionState:', rtc.pc.connectionState
 
 

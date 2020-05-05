@@ -55,7 +55,7 @@ export class RTCHandshake ::
     const ice = new RTCIceCandidate(msg)
     await this.pc.addIceCandidate(ice)
 
-  async on_msg(msg) ::
+  async on_rtc_msg(msg) ::
     try ::
       if msg.candidate ::
         return this._rtc_ice(msg)

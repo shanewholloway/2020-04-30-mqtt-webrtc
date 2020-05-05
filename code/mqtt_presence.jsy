@@ -16,19 +16,19 @@ export function mqtt_presence(opt={}) ::
     const tpc_recv = `${pfx}/m/${uid}/${peer_uid}/${chan_id}/`
     return @: chan_id
       json_send: mqtt.json_send(tpc_send)
-      on_msg: on_msg => mqtt.msg_subscribe @ tpc_recv, on_msg
+      on_msg: fn => mqtt.sub_route(tpc_recv, fn)
 
 
-  mqtt.on_msg @ `${pfx}/p/${uid}`, false
-  mqtt.on_msg @ `${pfx}/m/${uid}/${uid}`, false
-  mqtt.on_msg @ `${pfx}/m/${uid}/${uid}/*`, false
+  mqtt.add_route @ `${pfx}/p/${uid}`, false
+  mqtt.add_route @ `${pfx}/m/${uid}/${uid}`, false
+  mqtt.add_route @ `${pfx}/m/${uid}/${uid}/*`, false
 
   mqtt.on_status = @\ handler::
-    mqtt.on_msg @ `${pfx}/p/:peer_uid`, handler
+    mqtt.add_route @ `${pfx}/p/:peer_uid`, handler
 
   mqtt.on_message = @\ handler ::
-    mqtt.on_msg @ `${pfx}/m/${uid}/:peer_uid/:chan_id`, handler
-    mqtt.on_msg @ `${pfx}/m/${uid}/:peer_uid`, handler
+    mqtt.add_route @ `${pfx}/m/${uid}/:peer_uid/:chan_id`, handler
+    mqtt.add_route @ `${pfx}/m/${uid}/:peer_uid`, handler
 
 
   const _as_status_obj = status => @:
