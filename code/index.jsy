@@ -31,9 +31,9 @@ document.getElementById('frm_input')
 
 const mqtt = mqtt_presence @:
   pfx: `swh/${room_id}`, uid
-  //websock: 'ws://127.0.0.1:9001'
+  websock: 'ws://127.0.0.1:9001'
   //websock: 'ws://172.16.24.64:9001'
-  websock: 'wss://test.mosquitto.org:8081'
+  //websock: 'wss://test.mosquitto.org:8081'
 
 
 mqtt.on_status @\ pkt, {peer_uid} :: 

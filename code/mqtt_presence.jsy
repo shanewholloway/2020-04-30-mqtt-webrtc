@@ -1,9 +1,9 @@
-import MQTTClient from 'u8-mqtt/esm/web/v4.mjs'
+import mqtt_v4 from 'u8-mqtt/esm/web/v4.mjs'
 
 export default mqtt_presence
 export function mqtt_presence(opt={}) ::
   let {pfx, uid} = opt
-  const mqtt = new MQTTClient()
+  const mqtt = mqtt_v4()
 
   mqtt.msg_to = (peer_uid, msg) =>
     mqtt.json_send @ `${pfx}/m/${peer_uid}/${uid}`, msg
@@ -16,19 +16,19 @@ export function mqtt_presence(opt={}) ::
     const tpc_recv = `${pfx}/m/${uid}/${peer_uid}/${chan_id}/`
     return @: chan_id
       json_send: mqtt.json_send(tpc_send)
-      on_msg: fn => mqtt.sub_route(tpc_recv, fn)
+      on_msg: fn => mqtt.sub_topic(tpc_recv, fn)
 
 
-  mqtt.add_route @ `${pfx}/p/${uid}`, false
-  mqtt.add_route @ `${pfx}/m/${uid}/${uid}`, false
-  mqtt.add_route @ `${pfx}/m/${uid}/${uid}/*`, false
+  mqtt.on_topic @ `${pfx}/p/${uid}`, false
+  mqtt.on_topic @ `${pfx}/m/${uid}/${uid}`, false
+  mqtt.on_topic @ `${pfx}/m/${uid}/${uid}/*`, false
 
   mqtt.on_status = @\ handler::
-    mqtt.add_route @ `${pfx}/p/:peer_uid`, handler
+    mqtt.on_topic @ `${pfx}/p/:peer_uid`, handler
 
   mqtt.on_message = @\ handler ::
-    mqtt.add_route @ `${pfx}/m/${uid}/:peer_uid/:chan_id`, handler
-    mqtt.add_route @ `${pfx}/m/${uid}/:peer_uid`, handler
+    mqtt.on_topic @ `${pfx}/m/${uid}/:peer_uid/:chan_id`, handler
+    mqtt.on_topic @ `${pfx}/m/${uid}/:peer_uid`, handler
 
 
   const _as_status_obj = status => @:
@@ -39,9 +39,8 @@ export function mqtt_presence(opt={}) ::
   mqtt.update_status = status =>
     mqtt.publish @ _as_status_obj(status)
 
-  mqtt.ready = mqtt
-    .with_websock(opt.websock)
-    .then(_setup)
+  mqtt.with_live(_setup)
+  mqtt.with_websock(opt.websock)
 
   return mqtt
 
@@ -57,3 +56,4 @@ export function mqtt_presence(opt={}) ::
 
     mqtt.update_status @
       opt.presence || 'here'
+
